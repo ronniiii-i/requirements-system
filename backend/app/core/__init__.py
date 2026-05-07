@@ -1,0 +1,1 @@
+# core package — security, dependencies, shared utilities

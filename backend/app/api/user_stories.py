@@ -1,0 +1,173 @@
+from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.core.deps import get_current_user
+from app.models.user_project import User, Project
+from app.models.nlp import UserStory, NlpJob
+from app.schemas.user_story import UserStoryCreate, UserStoryOut, UserStoryWithNlp
+from app.services.nlp_service import call_nlp_pipeline
+from app.services.requirement_service import generate_requirements_from_nlp
+
+
+router = APIRouter(prefix="/api/projects/{project_id}/stories", tags=["User Stories"])
+
+
+def get_project_or_404(project_id: UUID, user: User, db: Session) -> Project:
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.owner_id == user.id
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+async def run_nlp_and_store(
+    user_story_id: UUID,
+    raw_text: str,
+    domain_context: str | None,
+    submitted_by: UUID,
+    db: Session,
+):
+    result = await call_nlp_pipeline(raw_text, domain_context)
+
+    if result["success"]:
+        data = result["data"]
+        nlp_job = NlpJob(
+            user_story_id=user_story_id,
+            model_used=data.get("model_used"),
+            spacy_output={
+                "tokens": data.get("tokens", []),
+                "named_entities": data.get("named_entities", []),
+                "dependency_parse": data.get("dependency_parse", []),
+            },
+            transformer_output={
+                "extracted_requirements": data.get("extracted_requirements", []),
+                "requirement_type": data.get("requirement_type"),
+                "requirement_type_confidence": data.get("requirement_type_confidence"),
+            },
+            tokens=data.get("tokens", []),
+            named_entities=data.get("named_entities", []),
+            dependency_parse={"parse": data.get("dependency_parse", [])},
+            processing_time_ms=data.get("processing_time_ms"),
+            success=True,
+        )
+
+        story = db.query(UserStory).filter(UserStory.id == user_story_id).first()
+        if story:
+            story.actors = data.get("actors", [])
+            story.goals = data.get("goals", [])
+            story.constraints = data.get("constraints", [])
+            story.processed = True
+
+        db.add(nlp_job)
+        db.flush()
+
+        if story:
+            generate_requirements_from_nlp(nlp_job, story, submitted_by, db)
+
+    else:
+        nlp_job = NlpJob(
+            user_story_id=user_story_id,
+            success=False,
+            error_message=result.get("error"),
+        )
+        db.add(nlp_job)
+        db.commit()
+
+
+
+@router.post("", response_model=UserStoryOut, status_code=status.HTTP_201_CREATED)
+async def submit_user_story(
+    project_id: UUID,
+    payload: UserStoryCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Submit a user story. NLP processing runs in the background.
+    Poll GET /{story_id} to check when processed=true.
+    """
+    get_project_or_404(project_id, current_user, db)
+
+    story = UserStory(
+        project_id=project_id,
+        submitted_by=current_user.id,
+        raw_text=payload.raw_text,
+        domain_context=payload.domain_context,
+        processed=False,
+    )
+    db.add(story)
+    db.commit()
+    db.refresh(story)
+
+    background_tasks.add_task(
+        run_nlp_and_store,
+        story.id,
+        story.raw_text,
+        story.domain_context,
+        current_user.id, 
+        db,
+    )
+
+    return story
+
+
+@router.get("", response_model=list[UserStoryOut])
+def list_stories(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    get_project_or_404(project_id, current_user, db)
+    return db.query(UserStory).filter(
+        UserStory.project_id == project_id
+    ).order_by(UserStory.created_at.desc()).all()
+
+
+@router.get("/{story_id}", response_model=UserStoryWithNlp)
+def get_story(
+    project_id: UUID,
+    story_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    get_project_or_404(project_id, current_user, db)
+
+    story = db.query(UserStory).filter(
+        UserStory.id == story_id,
+        UserStory.project_id == project_id,
+    ).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="User story not found")
+
+    nlp_job = db.query(NlpJob).filter(
+        NlpJob.user_story_id == story_id
+    ).order_by(NlpJob.created_at.desc()).first()
+
+    # Unpack JSONB fields into a plain dict for the response
+    nlp_data = None
+    if nlp_job:
+        transformer = nlp_job.transformer_output or {}
+        spacy_out = nlp_job.spacy_output or {}
+        nlp_data = {
+            "id": nlp_job.id,
+            "user_story_id": nlp_job.user_story_id,
+            "model_used": nlp_job.model_used,
+            "tokens": nlp_job.tokens,
+            "named_entities": spacy_out.get("named_entities", []),
+            "processing_time_ms": nlp_job.processing_time_ms,
+            "success": nlp_job.success,
+            "error_message": nlp_job.error_message,
+            "created_at": nlp_job.created_at,
+            "actors": story.actors or [],
+            "goals": story.goals or [],
+            "constraints": story.constraints or [],
+            "requirement_type": transformer.get("requirement_type"),
+            "requirement_type_confidence": transformer.get("requirement_type_confidence"),
+            "extracted_requirements": transformer.get("extracted_requirements", []),
+        }
+
+    return {"user_story": story, "nlp_job": nlp_data}
