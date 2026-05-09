@@ -8,7 +8,7 @@ from app.database import get_db
 from app.core.deps import get_current_user
 from app.models.user_project import User, Project
 from app.models.requirement import Requirement
-from app.models.traceability import Review
+from app.models.traceability import Review, TraceabilityMatrix
 from app.models.enums import RequirementStatus, ReviewDecision, PriorityLevel
 from app.schemas.requirement import RequirementOut, RequirementUpdate, RequirementSummary
 
@@ -205,31 +205,122 @@ def update_requirement(
     req = db.query(Requirement).filter(
         Requirement.id == req_id,
         Requirement.project_id == project_id,
+        Requirement.is_current_version == True,
     ).first()
     if not req:
         raise HTTPException(status_code=404, detail="Requirement not found")
 
-    for field, value in payload.model_dump(exclude_none=True).items():
-        setattr(req, field, value)
+    # Fields that warrant a new version (content changes)
+    VERSIONED_FIELDS = {"title", "statement", "rationale", "fit_criterion"}
+    changes = payload.model_dump(exclude_none=True)
+    creates_new_version = any(f in VERSIONED_FIELDS for f in changes)
 
-    scores = [
-        req.business_value_score,
-        req.risk_score,
-        req.cost_effort_score,
-        req.stakeholder_importance,
-    ]
-    if all(s is not None for s in scores):
-        req.weighted_score = _compute_weighted_score(
+    if creates_new_version:
+        # Mark current row as no longer current
+        req.is_current_version = False
+        db.flush()
+
+        # Create new version row copying all existing fields
+        new_req = Requirement(
+            project_id=req.project_id,
+            user_story_id=req.user_story_id,
+            nlp_job_id=req.nlp_job_id,
+            req_id=req.req_id,              # Keep same human-readable ID
+            title=req.title,
+            statement=req.statement,
+            type=req.type,
+            rationale=req.rationale,
+            fit_criterion=req.fit_criterion,
+            originator=req.originator,
+            status=req.status,
+            priority=req.priority,
+            version=req.version + 1,        # Increment version
+            is_current_version=True,
+            ai_generated=req.ai_generated,
+            ai_confidence=req.ai_confidence,
+            ambiguity_score=req.ambiguity_score,
+            completeness_score=req.completeness_score,
+            consistency_score=req.consistency_score,
+            testability_score=req.testability_score,
+            overall_quality_score=req.overall_quality_score,
+            qa_issues=req.qa_issues,
+            business_value_score=req.business_value_score,
+            risk_score=req.risk_score,
+            cost_effort_score=req.cost_effort_score,
+            stakeholder_importance=req.stakeholder_importance,
+            weighted_score=req.weighted_score,
+            created_by=current_user.id,
+        )
+
+        # Apply the incoming changes on top of the copy
+        for field, value in changes.items():
+            setattr(new_req, field, value)
+
+        db.add(new_req)
+        db.flush()
+
+        # Move RTM entry to point at new version
+        rtm = db.query(TraceabilityMatrix).filter(
+            TraceabilityMatrix.requirement_id == req.id
+        ).first()
+        if rtm:
+            rtm.requirement_id = new_req.id
+
+        # Recompute weighted score if scoring fields changed
+        scores = [
+            new_req.business_value_score,
+            new_req.risk_score,
+            new_req.cost_effort_score,
+            new_req.stakeholder_importance,
+        ]
+        if all(s is not None for s in scores):
+            from app.services.prioritization_service import compute_weighted_score, assign_moscow
+            new_req.weighted_score = compute_weighted_score(
+                new_req.business_value_score,
+                new_req.risk_score,
+                new_req.cost_effort_score,
+                new_req.stakeholder_importance,
+            )
+            all_scored = db.query(Requirement).filter(
+                Requirement.project_id == project_id,
+                Requirement.is_current_version == True,
+                Requirement.weighted_score.isnot(None),
+            ).all()
+            assign_moscow(all_scored)
+
+        db.commit()
+        db.refresh(new_req)
+        return new_req
+
+    else:
+        # Non-content changes (status, priority, scores) — update in place
+        for field, value in changes.items():
+            setattr(req, field, value)
+
+        scores = [
             req.business_value_score,
             req.risk_score,
             req.cost_effort_score,
             req.stakeholder_importance,
-        )
+        ]
+        if all(s is not None for s in scores):
+            from app.services.prioritization_service import compute_weighted_score, assign_moscow
+            req.weighted_score = compute_weighted_score(
+                req.business_value_score,
+                req.risk_score,
+                req.cost_effort_score,
+                req.stakeholder_importance,
+            )
+            all_scored = db.query(Requirement).filter(
+                Requirement.project_id == project_id,
+                Requirement.is_current_version == True,
+                Requirement.weighted_score.isnot(None),
+            ).all()
+            assign_moscow(all_scored)
 
-    db.commit()
-    db.refresh(req)
-    return req
-
+        db.commit()
+        db.refresh(req)
+        return req
 
 @router.post("/{req_id}/review", response_model=RequirementOut)
 def review_requirement(
