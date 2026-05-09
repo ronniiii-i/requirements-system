@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import check_db_connection
-from app.api import auth, projects, user_stories, requirements, exports
+from app.api import auth, projects, user_stories, requirements, exports, traceability
 import app.models 
 
 app = FastAPI(
@@ -27,6 +27,7 @@ app.include_router(projects.router)
 app.include_router(user_stories.router)
 app.include_router(requirements.router)
 app.include_router(exports.router)
+app.include_router(traceability.router)
 
 @app.get("/", tags=["Root"])
 def root():
