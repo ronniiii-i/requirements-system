@@ -1,0 +1,3 @@
+[submodule "reqgen-nlp"]
+	path = reqgen-nlp
+	url = https://huggingface.co/spaces/roniegbu/reqgen-nlp
