@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import check_db_connection
-from app.api import auth, projects, user_stories, requirements, exports, traceability
+from app.api import auth, projects, user_stories, requirements, exports, traceability, rasa
 import app.models 
 
 app = FastAPI(
@@ -20,6 +20,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+print(f"Allowed CORS origins: {settings.ALLOWED_ORIGINS.split(',')}")
 
 # Routers
 app.include_router(auth.router)
@@ -28,6 +29,7 @@ app.include_router(user_stories.router)
 app.include_router(requirements.router)
 app.include_router(exports.router)
 app.include_router(traceability.router)
+app.include_router(rasa.router)
 
 @app.get("/", tags=["Root"])
 def root():
