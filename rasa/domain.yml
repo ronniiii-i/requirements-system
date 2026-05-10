@@ -1,0 +1,197 @@
+version: "3.1"
+
+intents:
+  - greet
+  - goodbye
+  - provide_user_story
+  - provide_actor
+  - provide_goal
+  - provide_constraint
+  - provide_domain
+  - confirm
+  - deny
+  - start_over
+  - help
+  - inform
+
+entities:
+  - actor
+  - goal
+  - constraint
+  - domain_context
+
+slots:
+  project_id:
+    type: text
+    mappings:
+      - type: custom
+
+  user_token:
+    type: text
+    mappings:
+      - type: custom
+
+  actor:
+    type: text
+    mappings:
+      - type: from_entity
+        entity: actor
+        conditions:
+          - active_loop: user_story_form
+      - type: from_entity
+        entity: actor
+
+  goal:
+    type: text
+    mappings:
+      - type: from_entity
+        entity: goal
+        conditions:
+          - active_loop: user_story_form
+      - type: from_entity
+        entity: goal
+
+  constraint:
+    type: text
+    mappings:
+      - type: from_entity
+        entity: constraint
+        conditions:
+          - active_loop: user_story_form
+      - type: from_entity
+        entity: constraint
+
+  domain_context:
+    type: text
+    mappings:
+      - type: from_entity
+        entity: domain_context
+        conditions:
+          - active_loop: user_story_form
+      - type: from_entity
+        entity: domain_context
+      - type: from_text
+        conditions:
+          - active_loop: user_story_form
+            requested_slot: domain_context
+
+  story_confirmed:
+    type: bool
+    mappings:
+      - type: custom
+
+  submission_result:
+    type: text
+    mappings:
+      - type: custom
+
+forms:
+  user_story_form:
+    required_slots:
+      - actor
+      - goal
+      - constraint
+      - domain_context
+
+responses:
+  utter_greet:
+    - text: |
+        Hi! I'm the ReqGen assistant 👋
+        I help you capture user stories and turn them into structured requirements.
+
+        Tell me your user story using this format:
+        "As a [actor], I want to [goal] so that [condition]"
+
+        Type "help" at any time for guidance.
+
+  utter_ask_actor:
+    - text: |
+        Who is the primary user or actor for this requirement?
+        (e.g. "registered user", "admin", "doctor", "system")
+
+  utter_ask_goal:
+    - text: "What does the **{actor}** want to achieve? Be specific about the action or capability they need."
+
+  utter_ask_constraint:
+    - text: |
+        What is the measurable acceptance condition?
+
+        ⚠️  Avoid vague phrases like "so I can work better".
+        ✅  Be specific, e.g:
+            - "records load within 3 seconds"
+            - "only authorised users can access the data"
+            - "a confirmation email is sent within 30 seconds"
+
+  utter_ask_domain_context:
+    - text: |
+        What domain or module does this belong to?
+        (e.g. "Authentication", "Patient Management", "Payments", "Reporting")
+
+  utter_confirm_story:
+    - text: |
+        Here's your user story:
+
+        👤 Actor:      {actor}
+        🎯 Goal:       {goal}
+        ✅ Condition:  {constraint}
+        🏷️  Domain:     {domain_context}
+
+        Shall I submit this for requirements generation? (yes / no)
+
+  utter_submitting:
+    - text: "Submitting your user story... ⏳"
+
+  utter_submission_success:
+    - text: |
+        ✅ User story submitted successfully!
+
+        Your story is being processed by the NLP pipeline.
+        Requirements will be generated in a few seconds — check the Requirements tab.
+
+        Would you like to submit another story? (yes / no)
+
+  utter_submission_failed:
+    - text: |
+        ❌ Something went wrong submitting your story.
+        Please try again or contact support.
+
+  utter_goodbye:
+    - text: |
+        Goodbye! 👋 Your requirements are being generated.
+        Check the Requirements tab to review and approve them.
+
+  utter_help:
+    - text: |
+        Here's how to use the ReqGen assistant:
+
+        1. Tell me your user story:
+           "As a [actor], I want to [goal] so that [condition]"
+
+        2. I'll ask follow-up questions for anything missing.
+
+        3. Confirm to submit for AI-powered requirements generation.
+
+        4. Review, approve, or edit requirements in the Requirements tab.
+
+        Type "restart" to start over at any time.
+
+  utter_restart:
+    - text: "Starting fresh! 🔄 Tell me your new user story."
+
+  utter_default:
+    - text: |
+        I didn't quite understand that.
+        Try telling me your user story, or type "help" for guidance.
+
+  utter_ask_another:
+    - text: "Would you like to submit another user story? (yes / no)"
+
+actions:
+  - action_set_session_metadata
+  - action_submit_user_story
+  - action_restart_conversation
+  - validate_user_story_form
+
+session_config:
+  session_expiration_time: 60
+  carry_over_slots_to_new_session: true

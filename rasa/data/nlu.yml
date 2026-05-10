@@ -1,0 +1,200 @@
+version: "3.1"
+
+nlu:
+
+- intent: greet
+  examples: |
+    - hi
+    - hello
+    - hey
+    - good morning
+    - good afternoon
+    - hi there
+    - hello there
+    - hey there
+    - start
+    - begin
+    - let's start
+    - I want to add a user story
+
+- intent: goodbye
+  examples: |
+    - bye
+    - goodbye
+    - see you
+    - done
+    - I'm done
+    - that's all
+    - finish
+    - exit
+    - quit
+    - no more stories
+
+- intent: provide_user_story
+  examples: |
+    - As a [doctor](actor), I want to [view patient records](goal) so that [I can access their history](constraint)
+    - As a [registered user](actor), I want to [reset my password](goal) so that [I can regain access within 5 minutes](constraint)
+    - As an [admin](actor), I want to [manage user accounts](goal) so that [only authorised staff can log in](constraint)
+    - As a [customer](actor), I want to [track my order](goal) so that [I know the estimated delivery time](constraint)
+    - As a [developer](actor), I want to [view API logs](goal) so that [I can debug issues within 2 minutes](constraint)
+    - As a [nurse](actor), I want to [update patient vitals](goal) so that [the latest readings are available within 10 seconds](constraint)
+    - As a [manager](actor), I want to [generate monthly reports](goal) so that [I can review team performance](constraint)
+    - As a [student](actor), I want to [submit assignments online](goal) so that [submissions are confirmed immediately](constraint)
+    - As a [buyer](actor), I want to [add items to a cart](goal) so that [I can purchase multiple items at once](constraint)
+    - As a [system administrator](actor), I want to [schedule database backups](goal) so that [data is preserved every 24 hours](constraint)
+    - As a [patient](actor), I want to [book an appointment online](goal) so that [I receive a confirmation within 1 minute](constraint)
+    - As a [pharmacist](actor), I want to [check drug interactions](goal) so that [warnings appear before dispensing](constraint)
+
+- intent: provide_actor
+  examples: |
+    - [doctor](actor)
+    - [registered user](actor)
+    - [admin](actor)
+    - [administrator](actor)
+    - [customer](actor)
+    - [nurse](actor)
+    - [manager](actor)
+    - [student](actor)
+    - [buyer](actor)
+    - [patient](actor)
+    - [pharmacist](actor)
+    - [system admin](actor)
+    - [end user](actor)
+    - [guest user](actor)
+    - [staff member](actor)
+    - [developer](actor)
+    - the actor is [doctor](actor)
+    - the user is [admin](actor)
+    - it's a [registered user](actor)
+
+- intent: provide_goal
+  examples: |
+    - [view patient records](goal)
+    - [reset my password](goal)
+    - [manage user accounts](goal)
+    - [track my order](goal)
+    - [generate reports](goal)
+    - [upload documents](goal)
+    - [search for products](goal)
+    - [send notifications](goal)
+    - [export data to Excel](goal)
+    - [view analytics dashboard](goal)
+    - [update their profile](goal)
+    - [delete their account](goal)
+    - the goal is [view patient records](goal)
+    - they want to [manage inventory](goal)
+    - the user needs to [book appointments](goal)
+
+- intent: provide_constraint
+  examples: |
+    - [records load within 3 seconds](constraint)
+    - [only authorised users can access it](constraint)
+    - [a confirmation email is sent within 30 seconds](constraint)
+    - [the system processes requests in under 2 seconds](constraint)
+    - [data is encrypted at rest and in transit](constraint)
+    - [all actions are logged for audit purposes](constraint)
+    - [the page loads in under 1 second](constraint)
+    - [backups complete within 15 minutes](constraint)
+    - [the report is generated in under 5 seconds](constraint)
+    - [users receive immediate feedback on errors](constraint)
+    - so that [records are available within 2 seconds](constraint)
+    - the condition is [only admins can approve](constraint)
+    - the constraint is [the system supports 1000 concurrent users](constraint)
+
+- intent: provide_domain
+  examples: |
+    - [Healthcare](domain_context)
+    - [Authentication](domain_context)
+    - [Patient Management](domain_context)
+    - [Payments](domain_context)
+    - [Reporting](domain_context)
+    - [User Management](domain_context)
+    - [Security](domain_context)
+    - [Inventory](domain_context)
+    - [Notifications](domain_context)
+    - [Analytics](domain_context)
+    - it belongs to [Healthcare](domain_context)
+    - the domain is [Authentication](domain_context)
+    - this is for [Payments](domain_context)
+    - [E-commerce](domain_context)
+    - [Finance](domain_context)
+
+- intent: confirm
+  examples: |
+    - yes
+    - yes please
+    - correct
+    - that's right
+    - confirmed
+    - looks good
+    - submit it
+    - go ahead
+    - confirm
+    - yep
+    - yeah
+    - sure
+    - absolutely
+    - proceed
+
+- intent: deny
+  examples: |
+    - no
+    - no thanks
+    - that's wrong
+    - incorrect
+    - cancel
+    - don't submit
+    - let me change it
+    - nope
+    - not yet
+    - wait
+    - hold on
+    - actually no
+
+- intent: start_over
+  examples: |
+    - restart
+    - start over
+    - start again
+    - reset
+    - begin again
+    - new story
+    - let's start fresh
+
+- intent: help
+  examples: |
+    - help
+    - help me
+    - how does this work
+    - what should I do
+    - I don't understand
+    - guide me
+    - instructions
+    - what can you do
+    - how do I use this
+- intent: inform
+  examples: |
+    - [doctor](actor)
+    - [admin](actor)
+    - [registered user](actor)
+    - [nurse](actor)
+    - [manager](actor)
+    - [patient](actor)
+    - [view patient records](goal)
+    - [reset my password](goal)
+    - [manage user accounts](goal)
+    - [records load within 3 seconds](constraint)
+    - [only authorised users can access it](constraint)
+    - [a confirmation email is sent within 30 seconds](constraint)
+    - [Healthcare](domain_context)
+    - [Authentication](domain_context)
+    - [Payments](domain_context)
+    - Patient Management
+    - Healthcare
+    - Authentication
+    - Reporting
+    - yes submit it
+    - that's correct
+    - doctor
+    - admin
+    - nurse
