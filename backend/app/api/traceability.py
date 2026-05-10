@@ -76,10 +76,10 @@ def get_rtm(
             type=req.type,
             status=req.status,
             priority=req.priority,
-            # Source traceability (backward)
+        
             user_story_id=rtm.user_story_id if rtm else None,
             user_story_text=story.raw_text[:200] if story else None,
-            # Forward traceability
+        
             test_case_ref=rtm.test_case_ref if rtm else None,
             implementation_ref=rtm.implementation_ref if rtm else None,
             verification_method=rtm.verification_method if rtm else None,
@@ -118,7 +118,7 @@ def update_rtm_entry(
     """
     get_project_or_404(project_id, current_user, db)
 
-    # Confirm requirement belongs to this project
+
     req = db.query(Requirement).filter(
         Requirement.id == requirement_id,
         Requirement.project_id == project_id,
@@ -132,7 +132,7 @@ def update_rtm_entry(
     ).first()
 
     if not rtm:
-        # Create RTM entry if it doesn't exist (e.g. manually created requirements)
+    
         rtm = TraceabilityMatrix(
             project_id=project_id,
             requirement_id=requirement_id,
@@ -168,10 +168,6 @@ def update_rtm_entry(
     )
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-#  2. REQUIREMENT VERSION HISTORY
-#  GET /api/projects/{project_id}/requirements/{req_id}/history
-# ═════════════════════════════════════════════════════════════════════════════
 
 @router.get("/requirements/{req_id}/history", response_model=list[RequirementVersionOut])
 def get_requirement_history(
@@ -193,7 +189,7 @@ def get_requirement_history(
     """
     get_project_or_404(project_id, current_user, db)
 
-    # First confirm the req_id UUID exists in this project
+
     target = db.query(Requirement).filter(
         Requirement.id == req_id,
         Requirement.project_id == project_id,
@@ -201,7 +197,7 @@ def get_requirement_history(
     if not target:
         raise HTTPException(status_code=404, detail="Requirement not found")
 
-    # Fetch all versions by the human-readable req_id string (e.g. "FR-001")
+
     versions = (
         db.query(Requirement)
         .filter(
@@ -235,10 +231,6 @@ def get_requirement_history(
     ]
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-#  3. CHANGE IMPACT ANALYSIS
-#  GET /api/projects/{project_id}/requirements/{req_id}/impact
-# ═════════════════════════════════════════════════════════════════════════════
 
 @router.get("/requirements/{req_id}/impact", response_model=ImpactAnalysisOut)
 def get_impact_analysis(
@@ -272,7 +264,7 @@ def get_impact_analysis(
     if not req:
         raise HTTPException(status_code=404, detail="Requirement not found")
 
-    # Requirements this one depends on (outgoing edges)
+
     outgoing = (
         db.query(RequirementDependency, Requirement)
         .join(Requirement, Requirement.id == RequirementDependency.depends_on_id)
@@ -283,7 +275,7 @@ def get_impact_analysis(
         .all()
     )
 
-    # Requirements that depend on this one (incoming edges)
+
     incoming = (
         db.query(RequirementDependency, Requirement)
         .join(Requirement, Requirement.id == RequirementDependency.requirement_id)
@@ -318,7 +310,7 @@ def get_impact_analysis(
         for dep, r in incoming
     ]
 
-    # Plain-language impact summary
+
     if not depends_on and not depended_on_by:
         summary = f"{req.req_id} has no recorded dependencies. Changes to it are self-contained."
     else:
@@ -349,10 +341,6 @@ def get_impact_analysis(
     )
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-#  4. AUDIT LOG
-#  GET /api/projects/{project_id}/audit-log
-# ═════════════════════════════════════════════════════════════════════════════
 
 @router.get("/audit-log", response_model=AuditLogOut)
 def get_audit_log(
@@ -398,8 +386,8 @@ def get_audit_log(
         .all()
     )
 
-    # Enrich each entry with req_id string for display convenience
-    # (audit_log only stores the UUID — we resolve the human-readable ID)
+
+
     req_id_cache: dict[UUID, str] = {}
 
     def resolve_req_id(rid: Optional[UUID]) -> Optional[str]:
