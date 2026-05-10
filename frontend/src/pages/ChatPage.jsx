@@ -70,9 +70,6 @@ export function ChatPage({ project }) {
     }
   }, [project.id, project.name, token, refreshSidebar]);
 
-  useEffect(() => {
-    startNewChat();
-  }, [startNewChat]);
 
   const resumeConversation = async (conv) => {
     if (conv.id === conversationId) return;
@@ -105,11 +102,21 @@ export function ChatPage({ project }) {
   };
 
   const sendMessage = async () => {
-    if (!input.trim() || sending || !rasaSessionId) return;
+    if (!input.trim() || sending) return;
     const text = input.trim();
     setInput("");
     setSending(true);
-    setError("");
+    // setError("");
+
+    let convId = conversationId;
+    let rasaId = rasaSessionId;
+    if (!convId) {
+        const session = await initSession(project.id, token);
+        convId = session.conversation_id;
+        rasaId = session.rasa_session_id;
+        setConversationId(convId);
+        setRasaSessionId(rasaId);
+    }
 
     addMessage("user", text);
     if (conversationId) {
