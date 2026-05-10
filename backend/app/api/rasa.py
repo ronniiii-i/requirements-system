@@ -158,10 +158,13 @@ def list_conversations(
 
     return (
         db.query(Conversation)
+        .join(Message, Message.conversation_id == Conversation.id)
         .filter(
             Conversation.project_id == project_id,
             Conversation.user_id == current_user.id,
+            Message.sender == MessageSender.user,
         )
+        .group_by(Conversation.id)
         .order_by(Conversation.started_at.desc())
         .all()
     )
