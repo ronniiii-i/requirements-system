@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { getPrioritized, bulkPrioritize } from "../api/requirements";
-import { LoadingOverlay, Alert } from "../components/UI";
+import { LoadingOverlay, Alert, EmptyState } from "../components/UI";
 import { priorityBadge, priorityLabel } from "../utils/helpers";
 
 function ScoreSelect({ value, onChange }) {
@@ -54,7 +54,7 @@ export function PrioritizationPage({ project }) {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [project.id, token]);
+  }, [project.id, token]); // eslint-disable-line
 
   const setScore = (reqId, field, val) =>
     setScores((prev) => ({
@@ -74,9 +74,7 @@ export function PrioritizationPage({ project }) {
       await bulkPrioritize(project.id, scoreList, token);
       const updated = await getPrioritized(project.id, token);
       setReqs(updated);
-      setSuccess(
-        "Priorities saved and MoSCoW assignments updated across the project.",
-      );
+      setSuccess("Priorities saved and MoSCoW assignments updated.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -119,11 +117,11 @@ export function PrioritizationPage({ project }) {
       </div>
 
       {reqs.length === 0 ? (
-        <div
-          style={{ textAlign: "center", padding: 40, color: "var(--ink-3)" }}
-        >
-          No requirements to score. Generate some via the Chat tab first.
-        </div>
+        <EmptyState
+          icon="priority"
+          title="No requirements to score"
+          sub="Generate requirements via the Chat tab first."
+        />
       ) : (
         <div className="table-wrap">
           <table>

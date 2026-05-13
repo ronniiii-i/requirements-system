@@ -119,7 +119,7 @@ export function ExportPage({ project }) {
                 <span className="spinner" />
               ) : (
                 <Icon name="download" size={14} />
-              )}
+              )}{" "}
               Download {ex.title}
             </button>
           </div>

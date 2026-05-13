@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { listStories } from "../api/stories";
+import { listStories, deleteStory } from "../api/stories";
 import {
   initSession,
   sendToRasa,
@@ -8,6 +9,7 @@ import {
   endConversation,
   listConversations,
   getConversation,
+  deleteConversation,
 } from "../api/rasa";
 import { Icon, Alert, LoadingOverlay } from "../components/UI";
 import { formatDate } from "../utils/helpers";
@@ -17,6 +19,8 @@ const WELCOME = (projectName) =>
 
 export function ChatPage({ project }) {
   const { token, user } = useAuth();
+  const navigate = useNavigate();
+  const { conversationId: urlConvId } = useParams(); // from /chat/:conversationId
 
   const [conversations, setConversations] = useState([]);
   const [stories, setStories] = useState([]);
@@ -30,12 +34,17 @@ export function ChatPage({ project }) {
   const [sessionLoading, setSessionLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // UI state for confirm dialogs
+  const [deleteConvTarget, setDeleteConvTarget] = useState(null);
+  const [deleteStoryTarget, setDeleteStoryTarget] = useState(null);
+
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Refresh sidebar lists
   const refreshSidebar = useCallback(() => {
     listConversations(project.id, token)
       .then(setConversations)
@@ -49,50 +58,56 @@ export function ChatPage({ project }) {
     refreshSidebar();
   }, [refreshSidebar]);
 
-  const startNewChat = useCallback(async () => {
-    setSessionLoading(true);
-    setError("");
-    setMessages([]);
-    setConversationId(null);
-    setRasaSessionId(null);
-    try {
-      const session = await initSession(project.id, token);
-      setConversationId(session.conversation_id);
-      setRasaSessionId(session.rasa_session_id);
+  // If URL has a conversationId, load it on mount
+  useEffect(() => {
+    if (!urlConvId) {
+      // No conversation in URL — show welcome empty state, no session created yet
+      setConversationId(null);
+      setRasaSessionId(null);
       setMessages([
         { id: "welcome", sender: "bot", text: WELCOME(project.name) },
       ]);
-      refreshSidebar();
-    } catch (err) {
-      setError(`Could not start chat session: ${err.message}`);
-    } finally {
-      setSessionLoading(false);
+      return;
     }
-  }, [project.id, project.name, token, refreshSidebar]);
 
+    if (urlConvId === conversationId) return; // Already loaded
 
-  const resumeConversation = async (conv) => {
-    if (conv.id === conversationId) return;
-    setError("");
     setSessionLoading(true);
-    try {
-      const full = await getConversation(conv.id, token);
-      setConversationId(full.conversation_id);
-      setRasaSessionId(conv.rasa_session_id);
-      setMessages(
-        full.messages.length > 0
-          ? full.messages.map((m) => ({
-              id: m.id,
-              sender: m.sender,
-              text: m.content,
-            }))
-          : [{ id: "welcome", sender: "bot", text: WELCOME(project.name) }],
-      );
-    } catch (err) {
-      setError(`Could not load conversation: ${err.message}`);
-    } finally {
-      setSessionLoading(false);
-    }
+    getConversation(urlConvId, token)
+      .then((full) => {
+        setConversationId(full.conversation_id);
+        setRasaSessionId(full.conversation_id); // rasa session id = conversation id
+        setMessages(
+          full.messages.length > 0
+            ? full.messages.map((m) => ({
+                id: m.id,
+                sender: m.sender,
+                text: m.content,
+              }))
+            : [{ id: "welcome", sender: "bot", text: WELCOME(project.name) }],
+        );
+      })
+      .catch(() => {
+        setError("Could not load conversation.");
+        // Clear bad URL
+        navigate(`/projects/${project.id}/chat`, { replace: true });
+      })
+      .finally(() => setSessionLoading(false));
+  }, [urlConvId]); // eslint-disable-line
+
+  // Start a new chat (but DON'T create a session yet — lazy init on first message)
+  const startNewChat = useCallback(() => {
+    setConversationId(null);
+    setRasaSessionId(null);
+    setMessages([
+      { id: "welcome", sender: "bot", text: WELCOME(project.name) },
+    ]);
+    setError("");
+    navigate(`/projects/${project.id}/chat`, { replace: true });
+  }, [project.id, project.name, navigate]);
+
+  const resumeConversation = (conv) => {
+    navigate(`/projects/${project.id}/chat/${conv.id}`);
   };
 
   const addMessage = (sender, text) => {
@@ -106,52 +121,50 @@ export function ChatPage({ project }) {
     const text = input.trim();
     setInput("");
     setSending(true);
-    // setError("");
+    setError("");
 
+    addMessage("user", text);
+
+    // ── Lazy session init: create the session on the FIRST message ────────
     let convId = conversationId;
     let rasaId = rasaSessionId;
+
     if (!convId) {
+      try {
         const session = await initSession(project.id, token);
         convId = session.conversation_id;
         rasaId = session.rasa_session_id;
         setConversationId(convId);
         setRasaSessionId(rasaId);
+        // Update URL without re-render triggering the urlConvId effect
+        navigate(`/projects/${project.id}/chat/${convId}`, { replace: true });
+      } catch (err) {
+        addMessage("bot", "⚠️ Could not start chat session. Please try again.");
+        setSending(false);
+        return;
+      }
     }
+    // ─────────────────────────────────────────────────────────────────────
 
-    addMessage("user", text);
-    if (conversationId) {
-      storeMessage(
-        conversationId,
-        { sender: "user", content: text },
-        token,
-      ).catch(() => {});
-    }
+    // Persist user message
+    storeMessage(convId, { sender: "user", content: text }, token).catch(
+      () => {},
+    );
 
     try {
-      // Metadata is sent on EVERY message so Rasa can read project_id and
-      // user_token from tracker.latest_message.metadata on the REST channel.
-      // This is what fixes the "session error" — credentials don't need a
-      // SocketIO session_started event; they arrive with every request.
-      const responses = await sendToRasa(
-        rasaSessionId,
-        text,
-        project.id,
-        token,
-      );
+      const responses = await sendToRasa(rasaId, text, project.id, token);
 
       if (!responses || responses.length === 0) {
-        addMessage("bot", "...");
+        addMessage("bot", "…");
       } else {
         for (const r of responses) {
           if (r.text) {
             addMessage("bot", r.text);
-            if (conversationId) {
-              storeMessage(
-                conversationId,
-                { sender: "bot", content: r.text },
-                token,
-              ).catch(() => {});
-            }
+            storeMessage(
+              convId,
+              { sender: "bot", content: r.text },
+              token,
+            ).catch(() => {});
           }
         }
       }
@@ -173,14 +186,108 @@ export function ChatPage({ project }) {
     }
   };
 
-  const handleEnd = async () => {
-    if (conversationId)
+  const handleEndChat = async () => {
+    if (conversationId) {
       await endConversation(conversationId, token).catch(() => {});
-    await startNewChat();
+    }
+    startNewChat();
+  };
+
+  // ── Delete a conversation ──────────────────────────────────────────────
+  const confirmDeleteConv = async () => {
+    if (!deleteConvTarget) return;
+    try {
+      await deleteConversation(deleteConvTarget, token);
+      if (deleteConvTarget === conversationId) {
+        startNewChat();
+      }
+      refreshSidebar();
+    } catch {
+      setError("Failed to delete conversation.");
+    } finally {
+      setDeleteConvTarget(null);
+    }
+  };
+
+  // ── Delete a story ─────────────────────────────────────────────────────
+  const confirmDeleteStory = async () => {
+    if (!deleteStoryTarget) return;
+    try {
+      await deleteStory(project.id, deleteStoryTarget, token);
+      refreshSidebar();
+    } catch {
+      setError("Failed to delete story. It may have already been removed.");
+    } finally {
+      setDeleteStoryTarget(null);
+    }
   };
 
   return (
     <div className="chat-layout" style={{ height: "100%", overflow: "hidden" }}>
+      {/* ── Confirm dialogs ── */}
+      {deleteConvTarget && (
+        <div
+          className="modal-overlay"
+          onClick={() => setDeleteConvTarget(null)}
+        >
+          <div
+            className="modal"
+            style={{ maxWidth: 380 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-title">Delete conversation?</div>
+            <p
+              style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 20 }}
+            >
+              This will permanently delete the conversation and all its
+              messages. This cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button
+                className="btn btn-secondary"
+                onClick={() => setDeleteConvTarget(null)}
+              >
+                Cancel
+              </button>
+              <button className="btn btn-danger" onClick={confirmDeleteConv}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {deleteStoryTarget && (
+        <div
+          className="modal-overlay"
+          onClick={() => setDeleteStoryTarget(null)}
+        >
+          <div
+            className="modal"
+            style={{ maxWidth: 400 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-title">Delete story?</div>
+            <p
+              style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 20 }}
+            >
+              This will also delete all requirements generated from this story.
+              This cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button
+                className="btn btn-secondary"
+                onClick={() => setDeleteStoryTarget(null)}
+              >
+                Cancel
+              </button>
+              <button className="btn btn-danger" onClick={confirmDeleteStory}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Sidebar ── */}
       <div className="chat-sidebar">
         <div className="chat-sidebar-header">
@@ -208,6 +315,7 @@ export function ChatPage({ project }) {
           </button>
         </div>
 
+        {/* ── Chat list ── */}
         {sidebarTab === "chats" &&
           (conversations.length === 0 ? (
             <div
@@ -219,33 +327,54 @@ export function ChatPage({ project }) {
               }}
             >
               No conversations yet.
+              <br />
+              Send your first message to start one.
             </div>
           ) : (
             conversations.map((conv) => (
               <div
                 key={conv.id}
                 className={`chat-item ${conv.id === conversationId ? "active" : ""}`}
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 6,
+                  cursor: "pointer",
+                }}
                 onClick={() => resumeConversation(conv)}
-                style={{ cursor: "pointer" }}
               >
-                <div className="chat-item-title">
-                  {conv.id === conversationId ? "● " : ""}Session{" "}
-                  {conv.id.slice(0, 8)}…
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="chat-item-title">
+                    {conv.id === conversationId ? "● " : ""}
+                    {conv.title || `Session ${conv.id.slice(0, 8)}…`}
+                  </div>
+                  <div className="chat-item-meta">
+                    <span
+                      className={`badge ${conv.status === "active" ? "badge-green" : "badge-neutral"}`}
+                      style={{ fontSize: 9, padding: "1px 5px" }}
+                    >
+                      {conv.status}
+                    </span>
+                    {" · "}
+                    {formatDate(conv.started_at)}
+                  </div>
                 </div>
-                <div className="chat-item-meta">
-                  <span
-                    className={`badge ${conv.status === "active" ? "badge-green" : "badge-neutral"}`}
-                    style={{ fontSize: 9, padding: "1px 5px" }}
-                  >
-                    {conv.status}
-                  </span>
-                  {" · "}
-                  {formatDate(conv.started_at)}
-                </div>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ padding: "2px 4px", flexShrink: 0, opacity: 0.5 }}
+                  title="Delete conversation"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteConvTarget(conv.id);
+                  }}
+                >
+                  <Icon name="x" size={11} />
+                </button>
               </div>
             ))
           ))}
 
+        {/* ── Stories list ── */}
         {sidebarTab === "stories" &&
           (stories.length === 0 ? (
             <div
@@ -262,14 +391,31 @@ export function ChatPage({ project }) {
             </div>
           ) : (
             stories.map((s) => (
-              <div key={s.id} className="chat-item">
-                <div className="chat-item-title">
-                  {s.raw_text.substring(0, 55)}…
+              <div
+                key={s.id}
+                className="chat-item"
+                style={{ display: "flex", alignItems: "flex-start", gap: 6 }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="chat-item-title">
+                    {s.raw_text.substring(0, 55)}…
+                  </div>
+                  <div className="chat-item-meta">
+                    {s.processed ? "✓ Processed" : "⏳ Processing"} ·{" "}
+                    {formatDate(s.created_at)}
+                  </div>
                 </div>
-                <div className="chat-item-meta">
-                  {s.processed ? "✓ Processed" : "⏳ Processing"} ·{" "}
-                  {formatDate(s.created_at)}
-                </div>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ padding: "2px 4px", flexShrink: 0, opacity: 0.5 }}
+                  title="Delete story and its requirements"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteStoryTarget(s.id);
+                  }}
+                >
+                  <Icon name="x" size={11} />
+                </button>
               </div>
             ))
           ))}
@@ -287,13 +433,15 @@ export function ChatPage({ project }) {
             className="topbar-sub"
             style={{ fontFamily: "var(--font-mono)", fontSize: 10 }}
           >
-            {rasaSessionId ? rasaSessionId.slice(0, 8) + "…" : "connecting…"}
+            {conversationId
+              ? conversationId.slice(0, 8) + "…"
+              : "new conversation"}
           </span>
           {conversationId && (
             <button
               className="btn btn-ghost btn-sm"
               style={{ marginLeft: "auto", fontSize: 11 }}
-              onClick={handleEnd}
+              onClick={handleEndChat}
               title="End conversation and start fresh"
             >
               End chat
@@ -304,7 +452,7 @@ export function ChatPage({ project }) {
         {error && <Alert>{error}</Alert>}
 
         {sessionLoading ? (
-          <LoadingOverlay text="Loading…" />
+          <LoadingOverlay text="Loading conversation…" />
         ) : (
           <>
             <div className="chat-messages">
@@ -343,19 +491,20 @@ export function ChatPage({ project }) {
             <div className="chat-input-area">
               <textarea
                 className="chat-input"
+                rows={1}
+                placeholder="Type your user story or reply…"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKey}
-                placeholder="Type your user story… (Enter to send, Shift+Enter for new line)"
-                rows={1}
-                disabled={!rasaSessionId}
+                disabled={sending}
               />
               <button
                 className="btn btn-accent"
                 onClick={sendMessage}
-                disabled={sending || !input.trim() || !rasaSessionId}
+                disabled={sending || !input.trim()}
+                style={{ padding: "10px 14px" }}
               >
-                <Icon name="send" size={14} />
+                <Icon name="send" size={15} />
               </button>
             </div>
           </>

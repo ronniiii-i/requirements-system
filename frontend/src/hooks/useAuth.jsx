@@ -1,47 +1,62 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+// import { useNavigate } from "react-router-dom";
 import { getMe } from "../api/auth";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  // Token kept in memory only — never localStorage (security improvement over original)
-  // On page reload the user has to log in again. For a research prototype this is fine.
-  // If persistence is needed, swap to sessionStorage.
-  const [token, setToken] = useState(() => sessionStorage.getItem("rg_token") || "");
+  const [token, setToken] = useState(
+    () => sessionStorage.getItem("rg_token") || "",
+  );
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(!!token);
+  const [loading, setLoading] = useState(true);
 
+  // Hydrate user from token on mount
   useEffect(() => {
-    if (!token) { setLoading(false); return; }
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     getMe(token)
       .then(setUser)
       .catch(() => {
-        setToken("");
+        // Token invalid/expired — clear it
         sessionStorage.removeItem("rg_token");
+        setToken("");
       })
       .finally(() => setLoading(false));
-  }, [token]);
+  }, []); // eslint-disable-line
 
-  const login = (t) => {
-    setToken(t);
-    sessionStorage.setItem("rg_token", t);
-  };
+  const login = useCallback((newToken, userData) => {
+    sessionStorage.setItem("rg_token", newToken);
+    setToken(newToken);
+    setUser(userData);
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
+    sessionStorage.removeItem("rg_token");
     setToken("");
     setUser(null);
-    sessionStorage.removeItem("rg_token");
-  };
+    // Navigate is not available here (outside Router context for the provider itself),
+    // so we use window.location. AuthProvider is inside BrowserRouter so this is fine.
+    window.location.href = "/login";
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ token, user, login, logout, loading }}>
+    <AuthContext.Provider value={{ token, user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export const useAuth = () => {
+export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+  if (!ctx) throw new Error("useAuth must be inside AuthProvider");
   return ctx;
-};
+}
