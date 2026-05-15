@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, Enum, ForeignKey, Numeric
-from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY, TEXT
+from sqlalchemy import String, DateTime, Enum, ForeignKey, Numeric, Text
+from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -24,6 +24,9 @@ class Conversation(Base):
         nullable=False,
         default=ConversationStatus.active,
     )
+    # ── NEW: human-readable title generated from the first user message ───────
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
     context: Mapped[dict] = mapped_column(JSONB, default=dict)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -48,7 +51,7 @@ class Message(Base):
     sender: Mapped[MessageSender] = mapped_column(
         Enum(MessageSender, name="message_sender"), nullable=False
     )
-    content: Mapped[str] = mapped_column(TEXT, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
     intent: Mapped[str | None] = mapped_column(String(100))
     confidence: Mapped[float | None] = mapped_column(Numeric(5, 4))
     entities: Mapped[list] = mapped_column(JSONB, default=list)
