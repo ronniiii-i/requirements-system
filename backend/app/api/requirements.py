@@ -10,11 +10,12 @@ from app.models.user_project import User, Project
 from app.models.requirement import Requirement
 from app.models.traceability import Review, TraceabilityMatrix
 from app.models.enums import RequirementStatus, ReviewDecision, PriorityLevel
-from app.schemas.requirement import RequirementOut, RequirementUpdate, RequirementSummary
+from app.schemas.requirement import RequirementOut, RequirementUpdate
 
 router = APIRouter(prefix="/api/projects/{project_id}/requirements", tags=["Requirements"])
 
 
+# ── Payload schemas ───────────────────────────────────────────────────────────
 
 class ReviewPayload(BaseModel):
     decision: ReviewDecision
@@ -23,7 +24,7 @@ class ReviewPayload(BaseModel):
 
 
 class BulkScoreItem(BaseModel):
-    req_id: str = Field(..., examples=["FR-001"], description="Human-readable requirement ID, e.g. FR-001")
+    req_id: str = Field(..., examples=["FR-001"])
     business_value: int = Field(..., ge=1, le=5)
     risk: int = Field(..., ge=1, le=5)
     cost_effort: int = Field(..., ge=1, le=5)
@@ -34,6 +35,7 @@ class BulkScorePayload(BaseModel):
     scores: List[BulkScoreItem]
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def get_project_or_404(project_id: UUID, user: User, db: Session) -> Project:
     project = db.query(Project).filter(
@@ -47,20 +49,15 @@ def get_project_or_404(project_id: UUID, user: User, db: Session) -> Project:
 
 def _compute_weighted_score(bv: int, risk: int, cost: int, si: int) -> float:
     inverted_cost = 6 - cost
-    return round(
-        (bv * 0.4) + (risk * 0.2) + (inverted_cost * 0.2) + (si * 0.2),
-        3,
-    )
+    return round((bv * 0.4) + (risk * 0.2) + (inverted_cost * 0.2) + (si * 0.2), 3)
 
 
 def _assign_moscow(requirements: list) -> None:
     scored = [r for r in requirements if r.weighted_score is not None]
     if not scored:
         return
-
     scored_sorted = sorted(scored, key=lambda r: float(r.weighted_score), reverse=True)
     n = len(scored_sorted)
-
     for i, req in enumerate(scored_sorted):
         percentile = i / n
         if percentile < 0.25:
@@ -73,8 +70,9 @@ def _assign_moscow(requirements: list) -> None:
             req.priority = PriorityLevel.wont_have
 
 
+# ── List — returns FULL RequirementOut (not summary) so modal has all fields ──
 
-@router.get("", response_model=list[RequirementSummary])
+@router.get("", response_model=list[RequirementOut])
 def list_requirements(
     project_id: UUID,
     status: Optional[RequirementStatus] = None,
@@ -82,6 +80,11 @@ def list_requirements(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Returns the full requirement object (including statement, rationale,
+    fit_criterion, and all QA scores) so the frontend modal never needs
+    a second fetch.
+    """
     get_project_or_404(project_id, current_user, db)
 
     query = db.query(Requirement).filter(
@@ -96,6 +99,8 @@ def list_requirements(
     return query.order_by(Requirement.created_at.asc()).all()
 
 
+# ── Single requirement ────────────────────────────────────────────────────────
+
 @router.get("/prioritized", response_model=list[RequirementOut])
 def get_prioritized_requirements(
     project_id: UUID,
@@ -103,7 +108,6 @@ def get_prioritized_requirements(
     current_user: User = Depends(get_current_user),
 ):
     get_project_or_404(project_id, current_user, db)
-
     return (
         db.query(Requirement)
         .filter(
@@ -115,6 +119,25 @@ def get_prioritized_requirements(
     )
 
 
+@router.get("/{req_id}", response_model=RequirementOut)
+def get_requirement(
+    project_id: UUID,
+    req_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    get_project_or_404(project_id, current_user, db)
+    req = db.query(Requirement).filter(
+        Requirement.id == req_id,
+        Requirement.project_id == project_id,
+    ).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    return req
+
+
+# ── Bulk prioritize ───────────────────────────────────────────────────────────
+
 @router.post("/prioritize", response_model=list[RequirementOut])
 def bulk_prioritize(
     project_id: UUID,
@@ -125,7 +148,6 @@ def bulk_prioritize(
     get_project_or_404(project_id, current_user, db)
 
     submitted_req_ids = [item.req_id for item in payload.scores]
-
     reqs_in_batch = (
         db.query(Requirement)
         .filter(
@@ -141,11 +163,10 @@ def bulk_prioritize(
     if not_found:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Requirements not found in this project: {not_found}",
+            detail=f"Requirements not found: {not_found}",
         )
 
     req_map = {r.req_id: r for r in reqs_in_batch}
-
     for item in payload.scores:
         req = req_map[item.req_id]
         req.business_value_score = item.business_value
@@ -156,7 +177,7 @@ def bulk_prioritize(
             item.business_value, item.risk, item.cost_effort, item.stakeholder_importance
         )
 
-    all_current_reqs = (
+    all_current = (
         db.query(Requirement)
         .filter(
             Requirement.project_id == project_id,
@@ -164,33 +185,15 @@ def bulk_prioritize(
         )
         .all()
     )
-    _assign_moscow(all_current_reqs)
-
+    _assign_moscow(all_current)
     db.commit()
 
     for req in reqs_in_batch:
         db.refresh(req)
-
     return reqs_in_batch
 
 
-@router.get("/{req_id}", response_model=RequirementOut)
-def get_requirement(
-    project_id: UUID,
-    req_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    get_project_or_404(project_id, current_user, db)
-
-    req = db.query(Requirement).filter(
-        Requirement.id == req_id,
-        Requirement.project_id == project_id,
-    ).first()
-    if not req:
-        raise HTTPException(status_code=404, detail="Requirement not found")
-    return req
-
+# ── Update requirement (with versioning for content changes) ──────────────────
 
 @router.patch("/{req_id}", response_model=RequirementOut)
 def update_requirement(
@@ -210,22 +213,19 @@ def update_requirement(
     if not req:
         raise HTTPException(status_code=404, detail="Requirement not found")
 
-    # Fields that warrant a new version (content changes)
     VERSIONED_FIELDS = {"title", "statement", "rationale", "fit_criterion"}
     changes = payload.model_dump(exclude_none=True)
     creates_new_version = any(f in VERSIONED_FIELDS for f in changes)
 
     if creates_new_version:
-        # Mark current row as no longer current
         req.is_current_version = False
         db.flush()
 
-        # Create new version row copying all existing fields
         new_req = Requirement(
             project_id=req.project_id,
             user_story_id=req.user_story_id,
             nlp_job_id=req.nlp_job_id,
-            req_id=req.req_id,              # Keep same human-readable ID
+            req_id=req.req_id,
             title=req.title,
             statement=req.statement,
             type=req.type,
@@ -234,7 +234,7 @@ def update_requirement(
             originator=req.originator,
             status=req.status,
             priority=req.priority,
-            version=req.version + 1,        # Increment version
+            version=req.version + 1,
             is_current_version=True,
             ai_generated=req.ai_generated,
             ai_confidence=req.ai_confidence,
@@ -252,14 +252,13 @@ def update_requirement(
             created_by=current_user.id,
         )
 
-        # Apply the incoming changes on top of the copy
         for field, value in changes.items():
             setattr(new_req, field, value)
 
         db.add(new_req)
         db.flush()
 
-        # Move RTM entry to point at new version
+        # Move RTM entry to new version
         rtm = db.query(TraceabilityMatrix).filter(
             TraceabilityMatrix.requirement_id == req.id
         ).first()
@@ -274,8 +273,7 @@ def update_requirement(
             new_req.stakeholder_importance,
         ]
         if all(s is not None for s in scores):
-            from app.services.prioritization_service import compute_weighted_score, assign_moscow
-            new_req.weighted_score = compute_weighted_score(
+            new_req.weighted_score = _compute_weighted_score(
                 new_req.business_value_score,
                 new_req.risk_score,
                 new_req.cost_effort_score,
@@ -286,41 +284,82 @@ def update_requirement(
                 Requirement.is_current_version == True,
                 Requirement.weighted_score.isnot(None),
             ).all()
-            assign_moscow(all_scored)
+            _assign_moscow(all_scored)
 
         db.commit()
         db.refresh(new_req)
         return new_req
 
     else:
-        # Non-content changes (status, priority, scores) — update in place
         for field, value in changes.items():
             setattr(req, field, value)
 
-        scores = [
-            req.business_value_score,
-            req.risk_score,
-            req.cost_effort_score,
-            req.stakeholder_importance,
-        ]
+        scores = [req.business_value_score, req.risk_score, req.cost_effort_score, req.stakeholder_importance]
         if all(s is not None for s in scores):
-            from app.services.prioritization_service import compute_weighted_score, assign_moscow
-            req.weighted_score = compute_weighted_score(
-                req.business_value_score,
-                req.risk_score,
-                req.cost_effort_score,
-                req.stakeholder_importance,
+            req.weighted_score = _compute_weighted_score(
+                req.business_value_score, req.risk_score, req.cost_effort_score, req.stakeholder_importance,
             )
             all_scored = db.query(Requirement).filter(
                 Requirement.project_id == project_id,
                 Requirement.is_current_version == True,
                 Requirement.weighted_score.isnot(None),
             ).all()
-            assign_moscow(all_scored)
+            _assign_moscow(all_scored)
 
         db.commit()
         db.refresh(req)
         return req
+
+
+# ── Delete requirement ────────────────────────────────────────────────────────
+
+@router.delete("/{req_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_requirement(
+    project_id: UUID,
+    req_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Hard-deletes all versions of a requirement (same req_id lineage).
+    Also cleans up associated RTM entries. Irreversible.
+    """
+    get_project_or_404(project_id, current_user, db)
+
+    # Find the current version to get the req_id label
+    req = db.query(Requirement).filter(
+        Requirement.id == req_id,
+        Requirement.project_id == project_id,
+        Requirement.is_current_version == True,
+    ).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+
+    req_id_label = req.req_id
+
+    # Delete all RTM entries for all versions of this requirement
+    all_versions = db.query(Requirement).filter(
+        Requirement.project_id == project_id,
+        Requirement.req_id == req_id_label,
+    ).all()
+
+    for version in all_versions:
+        rtm = db.query(TraceabilityMatrix).filter(
+            TraceabilityMatrix.requirement_id == version.id
+        ).first()
+        if rtm:
+            db.delete(rtm)
+
+    # Delete all version rows
+    db.query(Requirement).filter(
+        Requirement.project_id == project_id,
+        Requirement.req_id == req_id_label,
+    ).delete(synchronize_session=False)
+
+    db.commit()
+
+
+# ── Review (approve / reject / needs_revision) ────────────────────────────────
 
 @router.post("/{req_id}/review", response_model=RequirementOut)
 def review_requirement(
@@ -339,7 +378,6 @@ def review_requirement(
     if not req:
         raise HTTPException(status_code=404, detail="Requirement not found")
 
-    # Update requirement status based on decision
     if payload.decision == ReviewDecision.approved:
         req.status = RequirementStatus.approved
     elif payload.decision == ReviewDecision.rejected:

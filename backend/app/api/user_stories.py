@@ -5,6 +5,8 @@ from app.database import get_db
 from app.core.deps import get_current_user
 from app.models.user_project import User, Project
 from app.models.nlp import UserStory, NlpJob
+from app.models.requirement import Requirement
+from app.models.traceability import TraceabilityMatrix
 from app.schemas.user_story import UserStoryCreate, UserStoryOut, UserStoryWithNlp
 from app.services.nlp_service import call_nlp_pipeline
 from app.services.requirement_service import generate_requirements_from_nlp
@@ -77,6 +79,7 @@ async def run_nlp_and_store(
         db.commit()
 
 
+# ── Submit story ──────────────────────────────────────────────────────────────
 
 @router.post("", response_model=UserStoryOut, status_code=status.HTTP_201_CREATED)
 async def submit_user_story(
@@ -86,10 +89,6 @@ async def submit_user_story(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Submit a user story. NLP processing runs in the background.
-    Poll GET /{story_id} to check when processed=true.
-    """
     get_project_or_404(project_id, current_user, db)
 
     story = UserStory(
@@ -108,12 +107,14 @@ async def submit_user_story(
         story.id,
         story.raw_text,
         story.domain_context,
-        current_user.id, 
+        current_user.id,
         db,
     )
 
     return story
 
+
+# ── List stories ──────────────────────────────────────────────────────────────
 
 @router.get("", response_model=list[UserStoryOut])
 def list_stories(
@@ -126,6 +127,8 @@ def list_stories(
         UserStory.project_id == project_id
     ).order_by(UserStory.created_at.desc()).all()
 
+
+# ── Get single story ──────────────────────────────────────────────────────────
 
 @router.get("/{story_id}", response_model=UserStoryWithNlp)
 def get_story(
@@ -147,7 +150,6 @@ def get_story(
         NlpJob.user_story_id == story_id
     ).order_by(NlpJob.created_at.desc()).first()
 
-    # Unpack JSONB fields into a plain dict for the response
     nlp_data = None
     if nlp_job:
         transformer = nlp_job.transformer_output or {}
@@ -171,3 +173,44 @@ def get_story(
         }
 
     return {"user_story": story, "nlp_job": nlp_data}
+
+
+# ── Delete story ──────────────────────────────────────────────────────────────
+
+@router.delete("/{story_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_story(
+    project_id: UUID,
+    story_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Deletes a user story. Also hard-deletes all requirements generated from
+    this story (and their RTM entries), since they are derived artefacts.
+    """
+    get_project_or_404(project_id, current_user, db)
+
+    story = db.query(UserStory).filter(
+        UserStory.id == story_id,
+        UserStory.project_id == project_id,
+    ).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="User story not found")
+
+    # Delete RTM entries for requirements from this story
+    reqs = db.query(Requirement).filter(Requirement.user_story_id == story_id).all()
+    for req in reqs:
+        rtm = db.query(TraceabilityMatrix).filter(
+            TraceabilityMatrix.requirement_id == req.id
+        ).first()
+        if rtm:
+            db.delete(rtm)
+
+    # Delete requirements (all versions)
+    db.query(Requirement).filter(
+        Requirement.user_story_id == story_id
+    ).delete(synchronize_session=False)
+
+    # Delete the story (cascades to NLP jobs)
+    db.delete(story)
+    db.commit()
