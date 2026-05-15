@@ -8,12 +8,10 @@ from app.models.enums import ConversationStatus, MessageSender
 # ── Request schemas ───────────────────────────────────────────────────────────
 
 class SessionInitRequest(BaseModel):
-    """Frontend sends this to create a conversation session before opening SocketIO."""
     project_id: UUID
 
 
 class MessageStoreRequest(BaseModel):
-    """Frontend sends this after each SocketIO exchange to persist the message."""
     sender: MessageSender
     content: str
     intent: Optional[str] = None
@@ -24,7 +22,6 @@ class MessageStoreRequest(BaseModel):
 # ── Response schemas ──────────────────────────────────────────────────────────
 
 class SessionInitResponse(BaseModel):
-    """Returned after POST /api/rasa/session — frontend uses rasa_session_id for SocketIO."""
     conversation_id: UUID
     rasa_session_id: str
     project_id: UUID
@@ -51,6 +48,8 @@ class ConversationOut(BaseModel):
     project_id: UUID
     rasa_session_id: Optional[str]
     status: ConversationStatus
+    # ── NEW: human-readable title (None if no messages yet) ──
+    title: Optional[str] = None
     started_at: datetime
     ended_at: Optional[datetime]
 
@@ -61,6 +60,7 @@ class ConversationHistoryOut(BaseModel):
     conversation_id: UUID
     project_id: UUID
     status: ConversationStatus
+    title: Optional[str] = None
     started_at: datetime
     ended_at: Optional[datetime]
     messages: list[MessageOut]
