@@ -67,11 +67,13 @@ export function PrioritizationPage({ project }) {
     setError("");
     setSuccess("");
     try {
+      // ── FIX: wrap the array in { scores: [...] } as the backend expects ──
       const scoreList = Object.entries(scores).map(([req_id, s]) => ({
         req_id,
         ...s,
       }));
-      await bulkPrioritize(project.id, scoreList, token);
+      await bulkPrioritize(project.id, { scores: scoreList }, token);
+
       const updated = await getPrioritized(project.id, token);
       setReqs(updated);
       setSuccess("Priorities saved and MoSCoW assignments updated.");
@@ -103,7 +105,21 @@ export function PrioritizationPage({ project }) {
       </div>
 
       {error && <Alert>{error}</Alert>}
-      {success && <Alert type="success">{success}</Alert>}
+      {success && (
+        <div
+          style={{
+            padding: "10px 14px",
+            background: "#f0fdf4",
+            border: "1px solid #bbf7d0",
+            borderRadius: "var(--radius)",
+            fontSize: 13,
+            color: "#15803d",
+            marginBottom: 16,
+          }}
+        >
+          {success}
+        </div>
+      )}
 
       <div className="card" style={{ marginBottom: 20, padding: "14px 20px" }}>
         <div style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.7 }}>

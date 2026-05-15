@@ -20,7 +20,7 @@ const WELCOME = (projectName) =>
 export function ChatPage({ project }) {
   const { token, user } = useAuth();
   const navigate = useNavigate();
-  const { conversationId: urlConvId } = useParams(); // from /chat/:conversationId
+  const { conversationId: urlConvId } = useParams();
 
   const [conversations, setConversations] = useState([]);
   const [stories, setStories] = useState([]);
@@ -30,21 +30,21 @@ export function ChatPage({ project }) {
   const [rasaSessionId, setRasaSessionId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
+  const [sending, setSending] = useState(false); // blocks double-submit
   const [sessionLoading, setSessionLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // UI state for confirm dialogs
   const [deleteConvTarget, setDeleteConvTarget] = useState(null);
   const [deleteStoryTarget, setDeleteStoryTarget] = useState(null);
 
   const messagesEndRef = useRef(null);
+  // Ref to track in-flight session init so concurrent calls don't double-create
+  const initInProgress = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Refresh sidebar lists
   const refreshSidebar = useCallback(() => {
     listConversations(project.id, token)
       .then(setConversations)
@@ -58,10 +58,9 @@ export function ChatPage({ project }) {
     refreshSidebar();
   }, [refreshSidebar]);
 
-  // If URL has a conversationId, load it on mount
+  // Load conversation from URL param
   useEffect(() => {
     if (!urlConvId) {
-      // No conversation in URL — show welcome empty state, no session created yet
       setConversationId(null);
       setRasaSessionId(null);
       setMessages([
@@ -69,14 +68,13 @@ export function ChatPage({ project }) {
       ]);
       return;
     }
-
-    if (urlConvId === conversationId) return; // Already loaded
+    if (urlConvId === conversationId) return;
 
     setSessionLoading(true);
     getConversation(urlConvId, token)
       .then((full) => {
         setConversationId(full.conversation_id);
-        setRasaSessionId(full.conversation_id); // rasa session id = conversation id
+        setRasaSessionId(full.conversation_id);
         setMessages(
           full.messages.length > 0
             ? full.messages.map((m) => ({
@@ -89,13 +87,11 @@ export function ChatPage({ project }) {
       })
       .catch(() => {
         setError("Could not load conversation.");
-        // Clear bad URL
         navigate(`/projects/${project.id}/chat`, { replace: true });
       })
       .finally(() => setSessionLoading(false));
   }, [urlConvId]); // eslint-disable-line
 
-  // Start a new chat (but DON'T create a session yet — lazy init on first message)
   const startNewChat = useCallback(() => {
     setConversationId(null);
     setRasaSessionId(null);
@@ -103,6 +99,8 @@ export function ChatPage({ project }) {
       { id: "welcome", sender: "bot", text: WELCOME(project.name) },
     ]);
     setError("");
+    setSending(false);
+    initInProgress.current = false;
     navigate(`/projects/${project.id}/chat`, { replace: true });
   }, [project.id, project.name, navigate]);
 
@@ -117,7 +115,9 @@ export function ChatPage({ project }) {
   };
 
   const sendMessage = async () => {
-    if (!input.trim() || sending) return;
+    // Hard guard: do nothing if already sending or input is empty
+    if (sending || !input.trim()) return;
+
     const text = input.trim();
     setInput("");
     setSending(true);
@@ -125,28 +125,35 @@ export function ChatPage({ project }) {
 
     addMessage("user", text);
 
-    // ── Lazy session init: create the session on the FIRST message ────────
+    // ── Lazy session init — only on first message, with in-flight guard ──
     let convId = conversationId;
     let rasaId = rasaSessionId;
 
     if (!convId) {
+      // Prevent double-init if React strict mode calls this twice
+      if (initInProgress.current) {
+        setSending(false);
+        return;
+      }
+      initInProgress.current = true;
       try {
         const session = await initSession(project.id, token);
         convId = session.conversation_id;
         rasaId = session.rasa_session_id;
         setConversationId(convId);
         setRasaSessionId(rasaId);
-        // Update URL without re-render triggering the urlConvId effect
         navigate(`/projects/${project.id}/chat/${convId}`, { replace: true });
-      } catch (err) {
+      } catch {
         addMessage("bot", "⚠️ Could not start chat session. Please try again.");
         setSending(false);
+        initInProgress.current = false;
         return;
+      } finally {
+        initInProgress.current = false;
       }
     }
-    // ─────────────────────────────────────────────────────────────────────
 
-    // Persist user message
+    // Persist user message to backend
     storeMessage(convId, { sender: "user", content: text }, token).catch(
       () => {},
     );
@@ -182,25 +189,23 @@ export function ChatPage({ project }) {
   const handleKey = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      // Extra guard at key level — don't even call sendMessage if already sending
+      if (!sending) sendMessage();
     }
   };
 
   const handleEndChat = async () => {
-    if (conversationId) {
+    if (conversationId)
       await endConversation(conversationId, token).catch(() => {});
-    }
     startNewChat();
   };
 
-  // ── Delete a conversation ──────────────────────────────────────────────
+  // ── Delete conversation ────────────────────────────────────────────────
   const confirmDeleteConv = async () => {
     if (!deleteConvTarget) return;
     try {
       await deleteConversation(deleteConvTarget, token);
-      if (deleteConvTarget === conversationId) {
-        startNewChat();
-      }
+      if (deleteConvTarget === conversationId) startNewChat();
       refreshSidebar();
     } catch {
       setError("Failed to delete conversation.");
@@ -209,14 +214,14 @@ export function ChatPage({ project }) {
     }
   };
 
-  // ── Delete a story ─────────────────────────────────────────────────────
+  // ── Delete story ──────────────────────────────────────────────────────
   const confirmDeleteStory = async () => {
     if (!deleteStoryTarget) return;
     try {
       await deleteStory(project.id, deleteStoryTarget, token);
       refreshSidebar();
     } catch {
-      setError("Failed to delete story. It may have already been removed.");
+      setError("Failed to delete story.");
     } finally {
       setDeleteStoryTarget(null);
     }
@@ -224,7 +229,7 @@ export function ChatPage({ project }) {
 
   return (
     <div className="chat-layout" style={{ height: "100%", overflow: "hidden" }}>
-      {/* ── Confirm dialogs ── */}
+      {/* ── Confirm modals ── */}
       {deleteConvTarget && (
         <div
           className="modal-overlay"
@@ -239,8 +244,7 @@ export function ChatPage({ project }) {
             <p
               style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 20 }}
             >
-              This will permanently delete the conversation and all its
-              messages. This cannot be undone.
+              This permanently deletes the conversation and all its messages.
             </p>
             <div className="modal-actions">
               <button
@@ -270,8 +274,7 @@ export function ChatPage({ project }) {
             <p
               style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 20 }}
             >
-              This will also delete all requirements generated from this story.
-              This cannot be undone.
+              This also deletes all requirements generated from this story.
             </p>
             <div className="modal-actions">
               <button
@@ -315,7 +318,6 @@ export function ChatPage({ project }) {
           </button>
         </div>
 
-        {/* ── Chat list ── */}
         {sidebarTab === "chats" &&
           (conversations.length === 0 ? (
             <div
@@ -345,7 +347,6 @@ export function ChatPage({ project }) {
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="chat-item-title">
-                    {conv.id === conversationId ? "● " : ""}
                     {conv.title || `Session ${conv.id.slice(0, 8)}…`}
                   </div>
                   <div className="chat-item-meta">
@@ -362,7 +363,7 @@ export function ChatPage({ project }) {
                 <button
                   className="btn btn-ghost btn-sm"
                   style={{ padding: "2px 4px", flexShrink: 0, opacity: 0.5 }}
-                  title="Delete conversation"
+                  title="Delete"
                   onClick={(e) => {
                     e.stopPropagation();
                     setDeleteConvTarget(conv.id);
@@ -374,7 +375,6 @@ export function ChatPage({ project }) {
             ))
           ))}
 
-        {/* ── Stories list ── */}
         {sidebarTab === "stories" &&
           (stories.length === 0 ? (
             <div
@@ -408,7 +408,7 @@ export function ChatPage({ project }) {
                 <button
                   className="btn btn-ghost btn-sm"
                   style={{ padding: "2px 4px", flexShrink: 0, opacity: 0.5 }}
-                  title="Delete story and its requirements"
+                  title="Delete story and requirements"
                   onClick={(e) => {
                     e.stopPropagation();
                     setDeleteStoryTarget(s.id);
@@ -442,7 +442,6 @@ export function ChatPage({ project }) {
               className="btn btn-ghost btn-sm"
               style={{ marginLeft: "auto", fontSize: 11 }}
               onClick={handleEndChat}
-              title="End conversation and start fresh"
             >
               End chat
             </button>
