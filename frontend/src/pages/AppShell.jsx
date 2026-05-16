@@ -13,6 +13,7 @@ import { Icon } from "../components/UI";
 import { LoginPage, RegisterPage } from "./LoginPage";
 import { ProjectsPage } from "./ProjectsPage";
 import { DashboardPage } from "./DashboardPage";
+import { StoriesPage } from "./StoriesPage";
 import { ChatPage } from "./ChatPage";
 import { RequirementsPage } from "./RequirementsPage";
 import { PrioritizationPage } from "./PrioritizationPage";
@@ -68,15 +69,17 @@ function ProjectLayout() {
   const path = location.pathname;
   const activePage = path.includes("/chat")
     ? "chat"
-    : path.includes("/requirements")
-      ? "requirements"
-      : path.includes("/prioritization")
-        ? "prioritization"
-        : path.includes("/rtm")
-          ? "rtm"
-          : path.includes("/export")
-            ? "export"
-            : "dashboard";
+    : path.includes("/stories")
+      ? "stories"
+      : path.includes("/requirements")
+        ? "requirements"
+        : path.includes("/prioritization")
+          ? "prioritization"
+          : path.includes("/rtm")
+            ? "rtm"
+            : path.includes("/export")
+              ? "export"
+              : "dashboard";
 
   return <ProjectShell project={project} activePage={activePage} />;
 }
@@ -85,6 +88,7 @@ function ProjectLayout() {
 const NAV_ITEMS = [
   { id: "dashboard", label: "Overview", icon: "home", path: "" },
   { id: "chat", label: "Chat", icon: "chat", path: "/chat" },
+  { id: "stories", label: "Stories", icon: "list", path: "/stories" },
   {
     id: "requirements",
     label: "Requirements",
@@ -104,6 +108,7 @@ const NAV_ITEMS = [
 const PAGE_LABELS = {
   dashboard: (p) => p.name,
   chat: "Chat",
+  stories: "User Stories",
   requirements: "Requirements",
   prioritization: "Prioritization",
   rtm: "Traceability",
@@ -210,6 +215,7 @@ function ProjectShell({ project, activePage }) {
               path="chat/:conversationId"
               element={<ChatPage project={project} />}
             />
+            <Route path="stories" element={<StoriesPage project={project} />} />
             <Route
               path="requirements"
               element={<RequirementsPage project={project} />}
@@ -229,7 +235,7 @@ function ProjectShell({ project, activePage }) {
 
 // ── Root shell (projects list + auth) ─────────────────────────────────────────
 function RootShell() {
-  const { token, user, logout, loading } = useAuth();
+  const { user, logout, loading } = useAuth();
   const navigate = useNavigate();
 
   if (loading) return null;
