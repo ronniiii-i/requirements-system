@@ -24,10 +24,6 @@ pydantic==2.7.1                    # Data validation (built into FastAPI)
 pydantic-settings==2.2.1          # Settings management via env vars
 # email-validator==2.1.1             # Email field validation
 
-# # ---- NLP — LIGHTWEIGHT (runs locally) ----
-spacy==3.7.4                       # Preprocessing pipeline
-# # After install, download model:
-# python -m spacy download en_core_web_sm
 
 # # ---- NLP — HEAVY (use HuggingFace Spaces for inference) ----
 transformers==4.41.0               # HuggingFace Transformers
