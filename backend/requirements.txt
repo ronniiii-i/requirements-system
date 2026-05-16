@@ -27,7 +27,7 @@ pydantic-settings==2.2.1          # Settings management via env vars
 # # ---- NLP — LIGHTWEIGHT (runs locally) ----
 spacy==3.7.4                       # Preprocessing pipeline
 # # After install, download model:
-python -m spacy download en_core_web_sm
+# python -m spacy download en_core_web_sm
 
 # # ---- NLP — HEAVY (use HuggingFace Spaces for inference) ----
 transformers==4.41.0               # HuggingFace Transformers

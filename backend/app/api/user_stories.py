@@ -185,8 +185,14 @@ def delete_story(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Deletes a user story. Also hard-deletes all requirements generated from
-    this story (and their RTM entries), since they are derived artefacts.
+    Deletes a user story and all derived artefacts in the correct order:
+      1. RTM entries for requirements from this story
+      2. Requirements (all versions)
+      3. NLP jobs (must be deleted before the story to avoid the NOT NULL
+         violation that occurs when SQLAlchemy tries to SET user_story_id=NULL
+         instead of letting Postgres CASCADE — the ORM relationship is missing
+         passive_deletes so we handle it explicitly here)
+      4. The story itself
     """
     get_project_or_404(project_id, current_user, db)
 
@@ -197,7 +203,7 @@ def delete_story(
     if not story:
         raise HTTPException(status_code=404, detail="User story not found")
 
-    # Delete RTM entries for requirements from this story
+    # 1. Delete RTM entries for requirements derived from this story
     reqs = db.query(Requirement).filter(Requirement.user_story_id == story_id).all()
     for req in reqs:
         rtm = db.query(TraceabilityMatrix).filter(
@@ -206,11 +212,20 @@ def delete_story(
         if rtm:
             db.delete(rtm)
 
-    # Delete requirements (all versions)
+    # 2. Delete all requirement rows (all versions)
     db.query(Requirement).filter(
         Requirement.user_story_id == story_id
     ).delete(synchronize_session=False)
 
-    # Delete the story (cascades to NLP jobs)
+    # 3. Explicitly delete NLP jobs BEFORE the story row is touched.
+    #    The NlpJob.user_story_id column is NOT NULL in the DB, but the
+    #    SQLAlchemy relationship lacks passive_deletes=True, so the ORM
+    #    would try to SET user_story_id=NULL (causing IntegrityError) instead
+    #    of relying on Postgres CASCADE. Deleting them manually avoids this.
+    db.query(NlpJob).filter(
+        NlpJob.user_story_id == story_id
+    ).delete(synchronize_session=False)
+
+    # 4. Delete the story itself
     db.delete(story)
     db.commit()
