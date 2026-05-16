@@ -2,114 +2,71 @@ version: "3.1"
 
 rules:
 
-# ── Always-on ─────────────────────────────────────────────────────────────────
-
 - rule: Greet user
   steps:
     - intent: greet
     - action: utter_greet
+
+- rule: Show help
+  steps:
+    - intent: help
+    - action: utter_help
 
 - rule: Say goodbye
   steps:
     - intent: goodbye
     - action: utter_goodbye
 
-- rule: Respond to help
-  steps:
-    - intent: help
-    - action: utter_help
-
-- rule: Handle restart outside form
-  steps:
-    - intent: start_over
-    - action: action_restart_conversation
-    - action: utter_restart
-
-- rule: Handle restart inside form
-  condition:
-    - active_loop: user_story_form
-  steps:
-    - intent: start_over
-    - action: action_deactivate_loop
-    - active_loop: null
-    - action: action_restart_conversation
-    - action: utter_restart
-
-- rule: NLU fallback
+- rule: Handle fallback
   steps:
     - intent: nlu_fallback
     - action: utter_default
 
-# ── Form activation ───────────────────────────────────────────────────────────
-
-- rule: Activate form — full story
+- rule: Activate form when user story is provided
   steps:
     - intent: provide_user_story
+    - action: action_extract_nlp_slots
     - action: user_story_form
     - active_loop: user_story_form
 
-- rule: Activate form — actor only
-  steps:
-    - intent: provide_actor
-    - action: user_story_form
-    - active_loop: user_story_form
-
-- rule: Activate form — goal only
-  steps:
-    - intent: provide_goal
-    - action: user_story_form
-    - active_loop: user_story_form
-
-# ── Form slot filling ─────────────────────────────────────────────────────────
-
-- rule: Fill slots — inform
-  condition:
-    - active_loop: user_story_form
-  steps:
-    - intent: inform
-    - action: user_story_form
-    - active_loop: user_story_form
-
-- rule: Fill slots — actor
-  condition:
-    - active_loop: user_story_form
-  steps:
-    - intent: provide_actor
-    - action: user_story_form
-    - active_loop: user_story_form
-
-- rule: Fill slots — goal
-  condition:
-    - active_loop: user_story_form
-  steps:
-    - intent: provide_goal
-    - action: user_story_form
-    - active_loop: user_story_form
-
-- rule: Fill slots — constraint
-  condition:
-    - active_loop: user_story_form
-  steps:
-    - intent: provide_constraint
-    - action: user_story_form
-    - active_loop: user_story_form
-
-- rule: Fill slots — domain
-  condition:
-    - active_loop: user_story_form
-  steps:
-    - intent: provide_domain
-    - action: user_story_form
-    - active_loop: user_story_form
-
-# ── Form completion — show confirmation ──────────────────────────────────────
-
-- rule: Form complete — ask for confirmation
+- rule: Submit form and show confirmation
   condition:
     - active_loop: user_story_form
   steps:
     - action: user_story_form
     - active_loop: null
-    - slot_was_set:
-        - requested_slot: null
     - action: utter_confirm_story
+
+- rule: User confirms after summary — submit story
+  steps:
+    - action: utter_confirm_story
+    - intent: confirm
+    - action: utter_submitting
+    - action: action_submit_user_story
+
+- rule: User denies after summary — restart
+  steps:
+    - action: utter_confirm_story
+    - intent: deny
+    - action: action_restart_conversation
+    - action: utter_restart
+
+- rule: User says no after submission — goodbye
+  steps:
+    - action: action_submit_user_story
+    - intent: deny
+    - action: utter_goodbye
+
+- rule: User wants another story after submission
+  steps:
+    - action: action_submit_user_story
+    - intent: start_over
+    - action: action_restart_conversation
+    - action: utter_restart
+
+- rule: User wants to start over at any time
+  steps:
+    - intent: start_over
+    - action: action_deactivate_loop
+    - action: action_restart_conversation
+    - action: utter_restart

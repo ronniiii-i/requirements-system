@@ -2,124 +2,47 @@ version: "3.1"
 
 stories:
 
-# ── Confirm and submit ────────────────────────────────────────────────────────
-
-- story: full story — confirm and submit
+- story: provide domain inside form
   steps:
-    - intent: greet
-    - action: utter_greet
     - intent: provide_user_story
-      entities:
-        - actor: "doctor"
-        - goal: "view patient records"
-        - constraint: "records load within 3 seconds"
-        - domain_context: "Healthcare"
-    - action: user_story_form
-    - active_loop: null
-    - action: utter_confirm_story
-    - intent: confirm
-    - action: utter_submitting
-    - action: action_submit_user_story
-    - intent: deny
-    - action: utter_goodbye
-
-- story: full story — confirm and submit another
-  steps:
-    - intent: greet
-    - action: utter_greet
-    - intent: provide_user_story
-      entities:
-        - actor: "admin"
-        - goal: "manage user accounts"
-        - constraint: "only authorised staff can log in"
-        - domain_context: "User Management"
-    - action: user_story_form
-    - active_loop: null
-    - action: utter_confirm_story
-    - intent: confirm
-    - action: utter_submitting
-    - action: action_submit_user_story
-    - intent: start_over
-    - action: action_restart_conversation
-    - action: utter_restart
-
-# ── Deny and restart ─────────────────────────────────────────────────────────
-
-- story: full story — deny and restart
-  steps:
-    - intent: greet
-    - action: utter_greet
-    - intent: provide_user_story
-      entities:
-        - actor: "customer"
-        - goal: "track my order"
-        - constraint: "delivery status updates within 1 minute"
-        - domain_context: "E-commerce"
-    - action: user_story_form
-    - active_loop: null
-    - action: utter_confirm_story
-    - intent: deny
-    - action: action_restart_conversation
-    - action: utter_restart
-
-# ── Partial story — form fills missing slots ──────────────────────────────────
-
-- story: story missing constraint — form fills it
-  steps:
-    - intent: greet
-    - action: utter_greet
-    - intent: provide_user_story
-      entities:
-        - actor: "nurse"
-        - goal: "update patient vitals"
-    - action: user_story_form
-    - active_loop: user_story_form
-    - intent: provide_constraint
-      entities:
-        - constraint: "latest readings available within 10 seconds"
+    - action: action_extract_nlp_slots
     - action: user_story_form
     - active_loop: user_story_form
     - intent: provide_domain
-      entities:
-        - domain_context: "Healthcare"
     - action: user_story_form
     - active_loop: null
     - action: utter_confirm_story
-    - intent: confirm
-    - action: utter_submitting
-    - action: action_submit_user_story
 
-- story: story missing domain only — form fills it
+- story: greet then provide story
   steps:
     - intent: greet
     - action: utter_greet
     - intent: provide_user_story
-      entities:
-        - actor: "manager"
-        - goal: "generate monthly reports"
-        - constraint: "report ready within 5 seconds"
+    - action: action_extract_nlp_slots
     - action: user_story_form
     - active_loop: user_story_form
     - intent: provide_domain
-      entities:
-        - domain_context: "Reporting"
     - action: user_story_form
     - active_loop: null
     - action: utter_confirm_story
-    - intent: confirm
-    - action: utter_submitting
-    - action: action_submit_user_story
 
-# ── Restart mid form ──────────────────────────────────────────────────────────
-
-- story: restart mid conversation — inside form
+- story: help then provide story
   steps:
-    - intent: greet
-    - action: utter_greet
+    - intent: help
+    - action: utter_help
     - intent: provide_user_story
-      entities:
-        - actor: "doctor"
-        - goal: "view patient records"
+    - action: action_extract_nlp_slots
+    - action: user_story_form
+    - active_loop: user_story_form
+    - intent: provide_domain
+    - action: user_story_form
+    - active_loop: null
+    - action: utter_confirm_story
+
+- story: restart mid form
+  steps:
+    - intent: provide_user_story
+    - action: action_extract_nlp_slots
     - action: user_story_form
     - active_loop: user_story_form
     - intent: start_over
@@ -127,22 +50,3 @@ stories:
     - active_loop: null
     - action: action_restart_conversation
     - action: utter_restart
-
-# ── Help then submit ──────────────────────────────────────────────────────────
-
-- story: help then submit
-  steps:
-    - intent: help
-    - action: utter_help
-    - intent: provide_user_story
-      entities:
-        - actor: "registered user"
-        - goal: "reset my password"
-        - constraint: "regain access within 5 minutes"
-        - domain_context: "Authentication"
-    - action: user_story_form
-    - active_loop: null
-    - action: utter_confirm_story
-    - intent: confirm
-    - action: utter_submitting
-    - action: action_submit_user_story

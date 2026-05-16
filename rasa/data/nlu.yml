@@ -16,6 +16,7 @@ nlu:
     - begin
     - let's start
     - I want to add a user story
+    - I'd like to submit a story
 
 - intent: goodbye
   examples: |
@@ -29,6 +30,8 @@ nlu:
     - exit
     - quit
     - no more stories
+    - no thanks I'm done
+    - no I'm finished
 
 - intent: provide_user_story
   examples: |
@@ -44,80 +47,85 @@ nlu:
     - As a [system administrator](actor), I want to [schedule database backups](goal) so that [data is preserved every 24 hours](constraint)
     - As a [patient](actor), I want to [book an appointment online](goal) so that [I receive a confirmation within 1 minute](constraint)
     - As a [pharmacist](actor), I want to [check drug interactions](goal) so that [warnings appear before dispensing](constraint)
-
-- intent: provide_actor
-  examples: |
-    - [doctor](actor)
-    - [registered user](actor)
-    - [admin](actor)
-    - [administrator](actor)
-    - [customer](actor)
-    - [nurse](actor)
-    - [manager](actor)
-    - [student](actor)
-    - [buyer](actor)
-    - [patient](actor)
-    - [pharmacist](actor)
-    - [system admin](actor)
-    - [end user](actor)
-    - [guest user](actor)
-    - [staff member](actor)
-    - [developer](actor)
-    - the actor is [doctor](actor)
-    - the user is [admin](actor)
-    - it's a [registered user](actor)
-
-- intent: provide_goal
-  examples: |
-    - [view patient records](goal)
-    - [reset my password](goal)
-    - [manage user accounts](goal)
-    - [track my order](goal)
-    - [generate reports](goal)
-    - [upload documents](goal)
-    - [search for products](goal)
-    - [send notifications](goal)
-    - [export data to Excel](goal)
-    - [view analytics dashboard](goal)
-    - [update their profile](goal)
-    - [delete their account](goal)
-    - the goal is [view patient records](goal)
-    - they want to [manage inventory](goal)
-    - the user needs to [book appointments](goal)
-
-- intent: provide_constraint
-  examples: |
-    - [records load within 3 seconds](constraint)
-    - [only authorised users can access it](constraint)
-    - [a confirmation email is sent within 30 seconds](constraint)
-    - [the system processes requests in under 2 seconds](constraint)
-    - [data is encrypted at rest and in transit](constraint)
-    - [all actions are logged for audit purposes](constraint)
-    - [the page loads in under 1 second](constraint)
-    - [backups complete within 15 minutes](constraint)
-    - [the report is generated in under 5 seconds](constraint)
-    - [users receive immediate feedback on errors](constraint)
-    - so that [records are available within 2 seconds](constraint)
-    - the condition is [only admins can approve](constraint)
-    - the constraint is [the system supports 1000 concurrent users](constraint)
+    - As a [doctor](actor), I want to [electronically sign a prescription](goal) so that [the patient can pick up their medicine immediately](constraint)
+    - As a [lab technician](actor), I want to [upload test results](goal) so that [doctors can view them within 30 seconds](constraint)
+    - As a [receptionist](actor), I want to [schedule patient appointments](goal) so that [double-bookings are prevented automatically](constraint)
+    - As a [billing officer](actor), I want to [generate invoices](goal) so that [patients receive them within 1 minute of discharge](constraint)
+    - As a [system admin](actor), I want to [configure user roles](goal) so that [access is restricted to authorised personnel only](constraint)
+    - As a [warehouse manager](actor), I want to [track stock levels](goal) so that [low stock alerts are triggered automatically](constraint)
+    - As a [finance officer](actor), I want to [export transaction reports](goal) so that [all records are available in Excel format](constraint)
+    - As a [support agent](actor), I want to [view customer history](goal) so that [I can resolve tickets within the SLA](constraint)
 
 - intent: provide_domain
   examples: |
-    - [Healthcare](domain_context)
-    - [Authentication](domain_context)
-    - [Patient Management](domain_context)
-    - [Payments](domain_context)
-    - [Reporting](domain_context)
-    - [User Management](domain_context)
-    - [Security](domain_context)
-    - [Inventory](domain_context)
-    - [Notifications](domain_context)
-    - [Analytics](domain_context)
-    - it belongs to [Healthcare](domain_context)
-    - the domain is [Authentication](domain_context)
-    - this is for [Payments](domain_context)
-    - [E-commerce](domain_context)
-    - [Finance](domain_context)
+    - Healthcare
+    - Authentication
+    - Patient Management
+    - Payments
+    - Reporting
+    - User Management
+    - Security
+    - Inventory
+    - Notifications
+    - Analytics
+    - Finance
+    - E-commerce
+    - Education
+    - Logistics
+    - CRM
+    - ERP
+    - Prescription & Medication
+    - Prescription and Medication
+    - Medical Records & Results
+    - Medical Records and Results
+    - Billing & Insurance
+    - Billing and Insurance
+    - Lab & Diagnostics
+    - Lab and Diagnostics
+    - Appointment & Scheduling
+    - Appointment and Scheduling
+    - Pharmacy & Dispensing
+    - Pharmacy and Dispensing
+    - Clinical & Nursing
+    - Clinical and Nursing
+    - Radiology & Imaging
+    - Radiology and Imaging
+    - Patient Registration & Admission
+    - Patient Registration and Admission
+    - Discharge & Transfer
+    - Discharge and Transfer
+    - Inventory & Supply Chain
+    - Inventory and Supply Chain
+    - HR & Payroll
+    - HR and Payroll
+    - Audit & Compliance
+    - Audit and Compliance
+    - Access Control & Authorization
+    - Access Control and Authorization
+    - Data & Reporting
+    - Data and Reporting
+    - Notifications & Alerts
+    - Notifications and Alerts
+    - it belongs to Healthcare
+    - the domain is Authentication
+    - this is for Payments
+    - this belongs to Prescription & Medication
+    - domain is Medical Records & Results
+    - it's in the Billing & Insurance module
+    - Prescription & Medication management
+    - this is a Healthcare requirement
+    - it's related to Patient Management
+    - the module is Pharmacy & Dispensing
+    - it falls under Lab & Diagnostics
+    - this is for the Appointment & Scheduling system
+    - belongs to the Clinical & Nursing domain
+    - it's part of Billing & Insurance
+    - this is in the Radiology & Imaging domain
+    - it's for Patient Registration & Admission
+    - Discharge & Transfer management
+    - Inventory & Supply Chain
+    - HR & Payroll system
+    - Audit & Compliance module
 
 - intent: confirm
   examples: |
@@ -135,6 +143,9 @@ nlu:
     - sure
     - absolutely
     - proceed
+    - yes submit
+    - please submit
+    - yes go ahead
 
 - intent: deny
   examples: |
@@ -150,6 +161,7 @@ nlu:
     - wait
     - hold on
     - actually no
+    - no I want to change it
 
 - intent: start_over
   examples: |
@@ -160,6 +172,12 @@ nlu:
     - begin again
     - new story
     - let's start fresh
+    - I want to submit a different story
+    - submit another story
+    - another one
+    - yes another
+    - yes submit another
+    - yes I want to submit another story
 
 - intent: help
   examples: |
@@ -172,29 +190,5 @@ nlu:
     - instructions
     - what can you do
     - how do I use this
-- intent: inform
-  examples: |
-    - [doctor](actor)
-    - [admin](actor)
-    - [registered user](actor)
-    - [nurse](actor)
-    - [manager](actor)
-    - [patient](actor)
-    - [view patient records](goal)
-    - [reset my password](goal)
-    - [manage user accounts](goal)
-    - [records load within 3 seconds](constraint)
-    - [only authorised users can access it](constraint)
-    - [a confirmation email is sent within 30 seconds](constraint)
-    - [Healthcare](domain_context)
-    - [Authentication](domain_context)
-    - [Payments](domain_context)
-    - Patient Management
-    - Healthcare
-    - Authentication
-    - Reporting
-    - yes submit it
-    - that's correct
-    - doctor
-    - admin
-    - nurse
+    - what is a user story
+    - show me an example
