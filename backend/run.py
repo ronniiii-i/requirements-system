@@ -1,21 +1,22 @@
+import subprocess
+import sys
 import uvicorn
-from alembic.config import Config
-from alembic import command
 from app.config import settings
 
-def run_migrations():
-    print("Running database migrations...")
-    try:
-        alembic_cfg = Config("alembic.ini")
-        command.upgrade(alembic_cfg, "head")
-        print("Migrations applied successfully!")
-    except Exception as e:
-        print(f"Migration failed: {e}")
-        raise e
-
 if __name__ == "__main__":
-    run_migrations()
-    
+    # Run migrations before starting the server.
+    # On Render, this means every deploy automatically migrates the DB
+    # before any traffic is accepted.
+    print("Running database migrations...")
+    result = subprocess.run(
+        ["alembic", "upgrade", "head"],
+        capture_output=False,   # let output stream to Render logs
+    )
+    if result.returncode != 0:
+        print("Migration failed — aborting startup.")
+        sys.exit(1)
+    print("Migrations complete.")
+
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",

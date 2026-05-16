@@ -173,6 +173,7 @@ CREATE TABLE conversations (
     project_id          UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     user_id             UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     rasa_session_id     VARCHAR(255) UNIQUE,        -- Rasa's internal session ID
+    title               VARCHAR(200) NULL,
     status              conversation_status NOT NULL DEFAULT 'active',
     context             JSONB DEFAULT '{}',         -- Rasa slot values, entities collected
     started_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),

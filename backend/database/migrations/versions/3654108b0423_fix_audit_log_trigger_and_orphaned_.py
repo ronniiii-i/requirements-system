@@ -1,7 +1,7 @@
 """fix_audit_log_trigger_and_orphaned_messages
 
 Revision ID: 3654108b0423
-Revises: 01e9839b99df
+Revises: 0001_initial_schema
 Create Date: 2026-05-14 01:01:05.241382
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '3654108b0423'
-down_revision: Union[str, Sequence[str], None] = '01e9839b99df'
+down_revision: Union[str, Sequence[str], None] = '0001_initial_schema'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
