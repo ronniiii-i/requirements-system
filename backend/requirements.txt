@@ -17,6 +17,7 @@ python-dotenv==1.0.1               # Load .env files
 
 # # ---- AUTHENTICATION ----
 passlib[bcrypt]==1.7.4             # Password hashing
+bcrypt==4.0.1
 python-jose[cryptography]==3.3.0   # JWT tokens
 
 # ---- VALIDATION ----
