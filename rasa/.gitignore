@@ -2,7 +2,7 @@
 .env.*
 !.env.example
 
-models/
+# models/
 
 venv/
 .venv/
