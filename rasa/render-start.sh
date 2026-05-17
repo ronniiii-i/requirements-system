@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 
-# Start action server in background
+echo "Starting on port: $PORT"
+
 rasa run actions --port 5055 &
 
-# Wait for model to load before binding to port
 sleep 10
 
-# Start Rasa server
-rasa run --enable-api --cors "*" --port $PORT
+rasa run --enable-api --cors "*" --port 5005 &
+
+# CORS proxy that sits in front of Rasa on $PORT
+python3 cors_proxy.py $PORT 5005
