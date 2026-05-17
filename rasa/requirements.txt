@@ -1,3 +1,5 @@
 packaging<22.0
-rasa==3.6.15
+rasa==3.6.20
 rasa-sdk==3.6.2
+httpx
+setuptools==65.5.0
